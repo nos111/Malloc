@@ -38,11 +38,35 @@ team_t team = {
 /* single word (4) or double word (8) alignment */
 #define ALIGNMENT 8
 
+#define WSIZE 4
+
+#define DSIZE 8
+
+
 /* rounds up to the nearest multiple of ALIGNMENT */
 #define ALIGN(size) (((size) + (ALIGNMENT-1)) & ~0x7)
 
 
 #define SIZE_T_SIZE (ALIGN(sizeof(size_t)))
+
+//pack the size and allocated bit to a word
+#define PACK (size, alloc) ((size) | (alloc))
+
+//get and put into memory location p
+#define GET(p) (*(unsigned int *) (p))
+#define PUT(p, value) (*(unsigned int *) (p) = (value))
+
+//get the size and alocated bit of a pointer p
+#define GET_SIZE(p) (GET(p) & 0x1)
+#define GET_ALLOC(p) (GET(p) & ~0x7)
+
+//get the header and footer of a block 
+#define GET_HEADER(p) ((char *)(p) - WSIZE)
+#define GET_FOOTER(p) ((char *)(p) + GET_SIZE(GET_HEADER(p)) - DSIZE)
+
+//get the next/previous block ptr 
+#define GETNXTBLK(p) ((char *)(p) + GET_SIZE(GET_HEADER(p)) - WSIZE)
+#define GETPRVBLK(p) ((char *)(p) - GET_SIZE((p) - DSIZE))
 
 /* 
  * mm_init - initialize the malloc package.
