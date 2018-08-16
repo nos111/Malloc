@@ -42,6 +42,8 @@ team_t team = {
 
 #define DSIZE 8
 
+#define CHUNKSIZE (1<<12)
+
 
 /* rounds up to the nearest multiple of ALIGNMENT */
 #define ALIGN(size) (((size) + (ALIGNMENT-1)) & ~0x7)
@@ -68,11 +70,27 @@ team_t team = {
 #define GETNXTBLK(p) ((char *)(p) + GET_SIZE(GET_HEADER(p)) - WSIZE)
 #define GETPRVBLK(p) ((char *)(p) - GET_SIZE((p) - DSIZE))
 
+//heap pointer
+char * heapPtr;
 /* 
  * mm_init - initialize the malloc package.
  */
 int mm_init(void)
 {
+    if((heapPtr = extendHeap(4*WSIZE)) == NULL) {
+        return -1;
+    }
+    PUT(heapPtr, 0);    //alignment padding
+    PUT(heapPtr + WSIZE, PACK(WSIZE, 1));    //prologue blocks
+    PUT(heapPtr + 2 * WSIZE, PACK(WSIZE, 1));
+    PUT(heapPtr + 3*WSIZE, PACK(0,1));         //epilogue header
+    heapPtr += 4*WSIZE;
+    //build first block
+    if((heapPtr = extendHeap(CHUNKSIZE)) == NULL) {
+        return -1;
+    }
+    prepareBlock(heapPtr, CHUNKSIZE, 0);
+
     return 0;
 }
 
@@ -82,7 +100,15 @@ int mm_init(void)
  */
 void *mm_malloc(size_t size)
 {
-    int newsize = ALIGN(size + SIZE_T_SIZE);
+    size_t newsize;
+    char * blockPtr;
+
+    newsize = ALIGN(size + SIZE_T_SIZE);
+    if(newsize == 0) return NULL;
+    newsize += 2*WSIZE;
+
+    blockPtr = findFit(newsize);
+
     void *p = mem_sbrk(newsize);
     if (p == (void *)-1)
 	return NULL;
@@ -119,10 +145,43 @@ void *mm_realloc(void *ptr, size_t size)
     return newptr;
 }
 
+static char * extendHeap(size_t size) {
+    char * blockptr;
+    if((long)(blockptr = mem_sbrk(size)) == (void *)-1) {
+        return NULL;
+    }
+    return blockptr;
+}
 
+static void prepareBlock(char * ptr, size_t size, int allocation) {
+    PUT(heapPtr, PACK(size, allocation));
+    PUT(heapPtr + size - WSIZE, PACK(size, allocation));
+}
 
+static char * findFit(size_t size) {
+    int fitFound = 0;
+    char * tempPtr = heapPtr;
+    size_t currentBS;
+    int allocation;
+    while(!fitFound) {
+        currentBS = GET_SIZE(tempPtr);
+        allocation = GET_ALLOC(tempPtr);
+        if((!allocation) && (currentBS >= size)) {
+            return chunkBlock(tempPtr, size);
+        }
+    }
+}
 
-
+static void * chunkBlock(char * ptr, size_t size) {
+    int difference = GET_SIZE(ptr) - size;
+    if(difference != 0 && difference > DSIZE) {
+        prepareBlock(ptr, size, 1);
+        prepareBlock(ptr + size, difference, 0);
+        return ptr;
+    }
+    prepareBlock(ptr, size + difference, 1);
+    return ptr;
+}
 
 
 
