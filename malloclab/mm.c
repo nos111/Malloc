@@ -42,7 +42,7 @@ team_t team = {
 
 #define DSIZE 8
 
-#define CHUNKSIZE (1<<12)
+#define CHUNKSIZE (4096)
 
 
 /* rounds up to the nearest multiple of ALIGNMENT */
@@ -52,26 +52,34 @@ team_t team = {
 #define SIZE_T_SIZE (ALIGN(sizeof(size_t)))
 
 //pack the size and allocated bit to a word
-#define PACK (size, alloc) ((size) | (alloc))
+#define PACK(size, alloc) ((size) | (alloc))
 
 //get and put into memory location p
-#define GET(p) (*(unsigned int *) (p))
-#define PUT(p, value) (*(unsigned int *) (p) = (value))
+#define GET(p) (*(unsigned int *)(p))
+#define PUT(p, value) (*(unsigned int *)(p) = (value))
 
 //get the size and alocated bit of a pointer p
-#define GET_SIZE(p) (GET(p) & 0x1)
-#define GET_ALLOC(p) (GET(p) & ~0x7)
+#define GET_SIZE(p) (GET(p) & ~0x7)
+#define GET_ALLOC(p) (GET(p) & 0x1)
 
 //get the header and footer of a block 
 #define GET_HEADER(p) ((char *)(p) - WSIZE)
 #define GET_FOOTER(p) ((char *)(p) + GET_SIZE(GET_HEADER(p)) - DSIZE)
 
 //get the next/previous block ptr 
-#define GETNXTBLK(p) ((char *)(p) + GET_SIZE(GET_HEADER(p)) - WSIZE)
+#define GETNXTBLK(p) ((char *)(p) + GET_SIZE(GET_HEADER(p)))
 #define GETPRVBLK(p) ((char *)(p) - GET_SIZE((p) - DSIZE))
 
-//heap pointer
+//heap pointer, points to the first byte of the first block
 char * heapPtr;
+
+//functions declaration
+static char * findFit(size_t size);
+static char * extendHeap(size_t size);
+static void prepareBlock(char * ptr, size_t size, int allocation);
+static char * chunkBlock(char * ptr, size_t size);
+static char * coalesce(char * ptr);
+
 /* 
  * mm_init - initialize the malloc package.
  */
@@ -80,17 +88,16 @@ int mm_init(void)
     if((heapPtr = extendHeap(4*WSIZE)) == NULL) {
         return -1;
     }
+    //printf("heap pointer at init %u", heapPtr);
     PUT(heapPtr, 0);    //alignment padding
-    PUT(heapPtr + WSIZE, PACK(WSIZE, 1));    //prologue blocks
-    PUT(heapPtr + 2 * WSIZE, PACK(WSIZE, 1));
-    PUT(heapPtr + 3*WSIZE, PACK(0,1));         //epilogue header
-    heapPtr += 4*WSIZE;
+    PUT(heapPtr + WSIZE, PACK(WSIZE, 1));      //prologue blocks
+    PUT(heapPtr + 2*WSIZE, PACK(0,1));         //epilogue header
+    heapPtr += 3*WSIZE;
     //build first block
     if((heapPtr = extendHeap(CHUNKSIZE)) == NULL) {
         return -1;
     }
-    prepareBlock(heapPtr, CHUNKSIZE, 0);
-
+    //printf("heap pointer at init %u", heapPtr);
     return 0;
 }
 
@@ -101,21 +108,15 @@ int mm_init(void)
 void *mm_malloc(size_t size)
 {
     size_t newsize;
-    char * blockPtr;
-
+    if(size == 0) return NULL;
+    //printf("requested size %u \n", size);
+    size += DSIZE;
     newsize = ALIGN(size + SIZE_T_SIZE);
-    if(newsize == 0) return NULL;
-    newsize += 2*WSIZE;
-
-    blockPtr = findFit(newsize);
-
-    void *p = mem_sbrk(newsize);
-    if (p == (void *)-1)
-	return NULL;
-    else {
-        *(size_t *)p = size;
-        return (void *)((char *)p + SIZE_T_SIZE);
-    }
+    //printf("aligned size %u \n", newsize);
+    
+    char * ptr = findFit(newsize);
+    //printf("the returned address from malloc is %u \n", ptr);
+    return (void*)ptr;
 }
 
 /*
@@ -147,40 +148,104 @@ void *mm_realloc(void *ptr, size_t size)
 
 static char * extendHeap(size_t size) {
     char * blockptr;
-    if((long)(blockptr = mem_sbrk(size)) == (void *)-1) {
+    if((void*)(blockptr = mem_sbrk(size)) == (void *)-1) {
         return NULL;
     }
+    PUT(GET_HEADER(blockptr), PACK(size,0));
+    PUT(GET_FOOTER(blockptr), PACK(size,0));
+    PUT(GET_HEADER(GETNXTBLK(blockptr)), PACK(0,1));
     return blockptr;
 }
 
 static void prepareBlock(char * ptr, size_t size, int allocation) {
-    PUT(heapPtr, PACK(size, allocation));
-    PUT(heapPtr + size - WSIZE, PACK(size, allocation));
+    PUT(GET_HEADER(ptr), PACK(size, allocation));
+    //printf("wrote %d %d at location %u", size, allocation, GET_HEADER(ptr));
+    PUT(GET_FOOTER(ptr), PACK(size, allocation));
+    //printf("wrote %d %d at location %u", size, allocation, GET_FOOTER(ptr));
 }
 
 static char * findFit(size_t size) {
     int fitFound = 0;
     char * tempPtr = heapPtr;
+    char * newBlockptr;
     size_t currentBS;
     int allocation;
     while(!fitFound) {
-        currentBS = GET_SIZE(tempPtr);
-        allocation = GET_ALLOC(tempPtr);
+        ////printf("the temp address is %u \n", tempPtr);
+        currentBS = GET_SIZE(GET_HEADER(tempPtr));
+        allocation = GET_ALLOC(GET_HEADER(tempPtr));
+        //printf("the blocksize is %u \n", currentBS);
+        //printf("the allocation is %u \n", allocation);
         if((!allocation) && (currentBS >= size)) {
+            //printf("chunked block \n");
             return chunkBlock(tempPtr, size);
         }
+        //check if there is enough space in the heap and extend otherwise
+        if(((void*)(mem_heap_hi()) - (void*)GET_FOOTER(tempPtr)) < size) {
+            if((newBlockptr = extendHeap(CHUNKSIZE)) == NULL) {
+                return NULL;
+            }
+            ////printf("the newblockptr address is %u \n", newBlockptr);
+            //prepareBlock(newBlockptr - 16, CHUNKSIZE, 0);
+            ////printf("the prev block size %d allocation %d \n",GET_SIZE(newBlockptr),GET_ALLOC(newBlockptr));
+            coalesce(newBlockptr);
+        }
+        ////printf("the footer address is %u \n", GET_FOOTER(tempPtr));
+        ////printf("the high address is %u \n", mem_heap_hi());
+        ////printf("the difference is %d \n", ((void*)(mem_heap_hi()) - (void*)GET_FOOTER(tempPtr)));
+
+        tempPtr = GETNXTBLK(tempPtr);
+
     }
+    return NULL;
 }
 
-static void * chunkBlock(char * ptr, size_t size) {
-    int difference = GET_SIZE(ptr) - size;
+static char * chunkBlock(char * ptr, size_t size) {
+    int difference = GET_SIZE(GET_HEADER(ptr)) - size;
     if(difference != 0 && difference > DSIZE) {
+        //printf("made block size %u ptr %u \n", size, ptr);
         prepareBlock(ptr, size, 1);
-        prepareBlock(ptr + size, difference, 0);
+        //printf("made block size %u ptr %u \n", difference, GETNXTBLK(ptr));
+        prepareBlock(GETNXTBLK(ptr), difference, 0);
         return ptr;
     }
     prepareBlock(ptr, size + difference, 1);
     return ptr;
+}
+
+static char * coalesce(char * ptr) {
+    size_t newSize;
+    size_t prevBlockAlloc = GET_ALLOC(GET_HEADER(GETPRVBLK(ptr)));
+    size_t nextBlockAlloc = GET_ALLOC(GET_HEADER(GETNXTBLK(ptr)));
+
+    if(prevBlockAlloc && nextBlockAlloc) {
+        //printf("case 1");
+        return ptr;
+
+    } else if(!prevBlockAlloc && !nextBlockAlloc) {
+        //printf("case 2");
+        newSize = GET_SIZE(GET_HEADER(GETPRVBLK(ptr))) 
+        + GET_SIZE(GET_HEADER(GETNXTBLK(ptr))) 
+        + GET_SIZE(GET_HEADER(ptr));
+        PUT(GET_HEADER(GETPRVBLK(ptr)), PACK(newSize,0));
+        PUT(GET_FOOTER(GETNXTBLK(ptr)), PACK(newSize,0));
+        return GETPRVBLK(ptr);
+
+    } else if(!prevBlockAlloc && nextBlockAlloc) {
+        //printf("case 3");
+        newSize = GET_SIZE(GET_HEADER(GETPRVBLK(ptr)))+ GET_SIZE(GET_HEADER(ptr));
+        PUT(GET_HEADER(GETPRVBLK(ptr)), PACK(newSize,0));
+        PUT(GET_FOOTER(ptr), PACK(newSize,0));
+        return GETPRVBLK(ptr);
+
+    } else {
+        //printf("case 4");
+        newSize = GET_SIZE(GET_HEADER(GETNXTBLK(ptr)))+ GET_SIZE(GET_HEADER(ptr));
+        PUT(GET_HEADER(ptr), PACK(newSize,0));
+        PUT(GET_FOOTER(GETNXTBLK(ptr)), PACK(newSize,0));
+        return ptr;
+    }
+
 }
 
 
