@@ -1,5 +1,5 @@
-//#ifndef MM_H
-//#define MM_H
+#ifndef MM_H
+#define MM_H
 #include <stdio.h>
 extern int mm_init (void);
 extern void *mm_malloc (size_t size);
@@ -21,4 +21,4 @@ typedef struct {
 } team_t;
 
 extern team_t team;
-//#endif
+#endif

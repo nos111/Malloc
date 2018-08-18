@@ -18,20 +18,16 @@
 static char *mem_start_brk;  /* points to first byte of heap */
 static char *mem_brk;        /* points to last byte of heap */
 static char *mem_max_addr;   /* largest legal heap address */ 
+static int initialize = 0;
 
+void unix_error(char *msg);
 /* 
  * mem_init - initialize the memory system model
  */
 void mem_init(void)
 {
-    /* allocate the storage we will use to model the available VM */
-    if ((mem_start_brk = (char *)malloc(MAX_HEAP)) == NULL) {
-	fprintf(stderr, "mem_init_vm: malloc error\n");
-	exit(1);
-    }
-
-    mem_max_addr = mem_start_brk + MAX_HEAP;  /* max legal heap address */
-    mem_brk = mem_start_brk;                  /* heap is empty initially */
+    initialize = 1;
+    mem_start_brk = sbrk(8);                 
 }
 
 /* 
@@ -39,7 +35,8 @@ void mem_init(void)
  */
 void mem_deinit(void)
 {
-    free(mem_start_brk);
+    if(brk(mem_start_brk) == -1) unix_error("brk error"); 
+    initialize = 0;  
 }
 
 /*
@@ -57,14 +54,14 @@ void mem_reset_brk()
  */
 void *mem_sbrk(int incr) 
 {
-    char *old_brk = mem_brk;
-
-    if ( (incr < 0) || ((mem_brk + incr) > mem_max_addr)) {
-	errno = ENOMEM;
-	fprintf(stderr, "ERROR: mem_sbrk failed. Ran out of memory...\n");
-	return (void *)-1;
+    if(!initialize) {
+        mem_init();
     }
-    mem_brk += incr;
+    char *old_brk = sbrk(incr);
+    if(brk(sbrk(0)) == -1) unix_error("brk error");
+
+    if(old_brk != (void*)-1) mem_brk += incr;;
+    
     return (void *)old_brk;
 }
 
@@ -98,4 +95,11 @@ size_t mem_heapsize()
 size_t mem_pagesize()
 {
     return (size_t)getpagesize();
+}
+
+
+void unix_error(char *msg)
+{
+    fprintf(stdout, "%s: %s\n", msg, strerror(errno));
+    exit(1);
 }

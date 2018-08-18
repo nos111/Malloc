@@ -10,10 +10,6 @@
 #include "mm.h"
 #include "memlib.h"
 
-/*********************************************************
- * NOTE TO STUDENTS: Before you do anything else, please
- * provide your team information in the following struct.
- ********************************************************/
 team_t team = {
     /* Team name */
     "Nour",
@@ -26,7 +22,6 @@ team_t team = {
     /* Second member's email address (leave blank if none) */
     ""
 };
-
 /* single word (4) or double word (8) alignment */
 #define ALIGNMENT 8
 
@@ -65,6 +60,8 @@ team_t team = {
 //heap pointer, points to the first byte of the first block
 char * heapPtr;
 
+int initialize = 0;
+
 //functions declaration
 static char * findFit(size_t size);
 static char * extendHeap(size_t size);
@@ -77,6 +74,7 @@ static char * coalesce(char * ptr);
  */
 int mm_init(void)
 {
+    initialize = 1;
     if((heapPtr = extendHeap(4*WSIZE)) == NULL) {
         return -1;
     }
@@ -98,6 +96,10 @@ int mm_init(void)
  */
 void *mm_malloc(size_t size)
 {
+    if(!initialize) {
+        mm_init();
+        initialize = 1;
+    }
     size_t newsize;
     if(size == 0) return NULL;
     //printf("requested size %u \n", size);
@@ -116,6 +118,7 @@ void *mm_malloc(size_t size)
 void mm_free(void *ptr)
 {
     prepareBlock(ptr, GET_SIZE(GET_HEADER(ptr)),0);
+    coalesce(ptr);
 
 }
 
@@ -144,6 +147,7 @@ static char * extendHeap(size_t size) {
     if((void*)(blockptr = mem_sbrk(size)) == (void *)-1) {
         return NULL;
     }
+    //blockptr += WSIZE;
     PUT(GET_HEADER(blockptr), PACK(size,0));
     PUT(GET_FOOTER(blockptr), PACK(size,0));
     PUT(GET_HEADER(GETNXTBLK(blockptr)), PACK(0,1));
