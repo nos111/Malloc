@@ -1,13 +1,5 @@
 /*
- * mm-naive.c - The fastest, least memory-efficient malloc package.
- * 
- * In this naive approach, a block is allocated by simply incrementing
- * the brk pointer.  A block is pure payload. There are no headers or
- * footers.  Blocks are never coalesced or reused. Realloc is
- * implemented directly using mm_malloc and mm_free.
- *
- * NOTE TO STUDENTS: Replace this header comment with your own header
- * comment that gives a high level description of your solution.
+ * mm_malloc using an implicit free list. 
  */
 #include <stdio.h>
 #include <stdlib.h>
@@ -102,8 +94,7 @@ int mm_init(void)
 }
 
 /* 
- * mm_malloc - Allocate a block by incrementing the brk pointer.
- *     Always allocate a block whose size is a multiple of the alignment.
+ * mm_malloc - Allocate a block by finding the first fit in the heap
  */
 void *mm_malloc(size_t size)
 {
@@ -120,10 +111,12 @@ void *mm_malloc(size_t size)
 }
 
 /*
- * mm_free - Freeing a block does nothing.
+ * mm_free - Frees a block
  */
 void mm_free(void *ptr)
 {
+    prepareBlock(ptr, GET_SIZE(GET_HEADER(ptr)),0);
+
 }
 
 /*
@@ -159,9 +152,7 @@ static char * extendHeap(size_t size) {
 
 static void prepareBlock(char * ptr, size_t size, int allocation) {
     PUT(GET_HEADER(ptr), PACK(size, allocation));
-    //printf("wrote %d %d at location %u", size, allocation, GET_HEADER(ptr));
     PUT(GET_FOOTER(ptr), PACK(size, allocation));
-    //printf("wrote %d %d at location %u", size, allocation, GET_FOOTER(ptr));
 }
 
 static char * findFit(size_t size) {
@@ -171,13 +162,9 @@ static char * findFit(size_t size) {
     size_t currentBS;
     int allocation;
     while(!fitFound) {
-        ////printf("the temp address is %u \n", tempPtr);
         currentBS = GET_SIZE(GET_HEADER(tempPtr));
         allocation = GET_ALLOC(GET_HEADER(tempPtr));
-        //printf("the blocksize is %u \n", currentBS);
-        //printf("the allocation is %u \n", allocation);
         if((!allocation) && (currentBS >= size)) {
-            //printf("chunked block \n");
             return chunkBlock(tempPtr, size);
         }
         //check if there is enough space in the heap and extend otherwise
@@ -185,14 +172,8 @@ static char * findFit(size_t size) {
             if((newBlockptr = extendHeap(CHUNKSIZE)) == NULL) {
                 return NULL;
             }
-            ////printf("the newblockptr address is %u \n", newBlockptr);
-            //prepareBlock(newBlockptr - 16, CHUNKSIZE, 0);
-            ////printf("the prev block size %d allocation %d \n",GET_SIZE(newBlockptr),GET_ALLOC(newBlockptr));
             coalesce(newBlockptr);
         }
-        ////printf("the footer address is %u \n", GET_FOOTER(tempPtr));
-        ////printf("the high address is %u \n", mem_heap_hi());
-        ////printf("the difference is %d \n", ((void*)(mem_heap_hi()) - (void*)GET_FOOTER(tempPtr)));
 
         tempPtr = GETNXTBLK(tempPtr);
 
@@ -203,9 +184,7 @@ static char * findFit(size_t size) {
 static char * chunkBlock(char * ptr, size_t size) {
     int difference = GET_SIZE(GET_HEADER(ptr)) - size;
     if(difference != 0 && difference > DSIZE) {
-        //printf("made block size %u ptr %u \n", size, ptr);
         prepareBlock(ptr, size, 1);
-        //printf("made block size %u ptr %u \n", difference, GETNXTBLK(ptr));
         prepareBlock(GETNXTBLK(ptr), difference, 0);
         return ptr;
     }
