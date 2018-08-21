@@ -12,7 +12,6 @@
 #include <errno.h>
 
 #include "memlib.h"
-#include "config.h"
 
 /* private variables */
 static char *mem_start_brk;  /* points to first byte of heap */
@@ -27,7 +26,8 @@ void unix_error(char *msg);
 void mem_init(void)
 {
     initialize = 1;
-    mem_start_brk = sbrk(8);                 
+    mem_start_brk = sbrk(8);  
+    mem_brk = sbrk(0);               
 }
 
 /* 
@@ -58,7 +58,6 @@ void *mem_sbrk(int incr)
         mem_init();
     }
     char *old_brk = sbrk(incr);
-    if(brk(sbrk(0)) == -1) unix_error("brk error");
 
     if(old_brk != (void*)-1) mem_brk += incr;;
     
@@ -102,4 +101,8 @@ void unix_error(char *msg)
 {
     fprintf(stdout, "%s: %s\n", msg, strerror(errno));
     exit(1);
+}
+
+void lowerHighPtr(size_t inc) {
+    mem_brk += inc;
 }

@@ -10,18 +10,6 @@
 #include "mm.h"
 #include "memlib.h"
 
-team_t team = {
-    /* Team name */
-    "Nour",
-    /* First member's full name */
-    "Nour saffour",
-    /* First member's email address */
-    "nsaffour@gmail.com",
-    /* Second member's full name (leave blank if none) */
-    "",
-    /* Second member's email address (leave blank if none) */
-    ""
-};
 /* single word (4) or double word (8) alignment */
 #define ALIGNMENT 8
 
@@ -57,10 +45,16 @@ team_t team = {
 #define GETNXTBLK(p) ((char *)(p) + GET_SIZE(GET_HEADER(p)))
 #define GETPRVBLK(p) ((char *)(p) - GET_SIZE((p) - DSIZE))
 
+//global variabls
 //heap pointer, points to the first byte of the first block
 char * heapPtr;
-
 int initialize = 0;
+struct record {
+    char ** allocatedBlocks[1024];
+    int allocatedEntries;
+};
+
+struct record r = {.allocatedEntries = 0};
 
 //functions declaration
 static char * findFit(size_t size);
@@ -68,6 +62,7 @@ static char * extendHeap(size_t size);
 static void prepareBlock(char * ptr, size_t size, int allocation);
 static char * chunkBlock(char * ptr, size_t size);
 static char * coalesce(char * ptr);
+void shrinkHeap(char * ptr);
 
 /* 
  * mm_init - initialize the malloc package.
@@ -102,12 +97,13 @@ void *mm_malloc(size_t size)
     }
     size_t newsize;
     if(size == 0) return NULL;
-    //printf("requested size %u \n", size);
+    //printf("requested size %zu \n", size);
     size += DSIZE;
     newsize = ALIGN(size + SIZE_T_SIZE);
-    //printf("aligned size %u \n", newsize);
-    
+    //printf("aligned size %zu \n", newsize);
+    assert(newsize % 8 == 0);
     char * ptr = findFit(newsize);
+    r.allocatedBlocks[++r.allocatedEntries] = ptr;
     //printf("the returned address from malloc is %u \n", ptr);
     return (void*)ptr;
 }
@@ -117,9 +113,17 @@ void *mm_malloc(size_t size)
  */
 void mm_free(void *ptr)
 {
+    char * temp;
+    printf("freeing block %u \n", ptr);
+    printf("the high pointer is %u \n", mem_heap_hi());
     prepareBlock(ptr, GET_SIZE(GET_HEADER(ptr)),0);
-    coalesce(ptr);
-
+    printf("freed block size %d pointer %u highheap %u \n",GET_SIZE(GET_HEADER(ptr)), ptr, mem_heap_hi());
+    temp = coalesce(ptr);
+    printf("coalesced block size %d pointer %u highheap %u \n",GET_SIZE(GET_HEADER(temp)), temp, mem_heap_hi());
+    if((GET_SIZE(GET_HEADER(temp)) + temp - 1) == mem_heap_hi()) {
+        printf("found it \n");
+        shrinkHeap(temp);
+    }
 }
 
 /*
@@ -165,21 +169,35 @@ static char * findFit(size_t size) {
     char * newBlockptr;
     size_t currentBS;
     int allocation;
+    int counter = 0;
     while(!fitFound) {
+        if(counter++ == 10) exit(0);
+
+        printf("temp %u high %u \n", tempPtr,  mem_heap_hi());
         currentBS = GET_SIZE(GET_HEADER(tempPtr));
         allocation = GET_ALLOC(GET_HEADER(tempPtr));
+        printf("size %d allocation %d ptr %u \n", currentBS, allocation, tempPtr);
         if((!allocation) && (currentBS >= size)) {
             return chunkBlock(tempPtr, size);
         }
         //check if there is enough space in the heap and extend otherwise
-        if(((void*)(mem_heap_hi()) - (void*)GET_FOOTER(tempPtr)) < size) {
+        int heapSize = (int)((void*)(mem_heap_hi()) - (void*)GET_FOOTER(tempPtr));
+        assert(heapSize >= 0);
+        printf("heapsize %d \n", heapSize);
+        //printf("condition %d difference %d \n", heapSize < size, heapSize);
+        //printf("condition %d requested size %d \n", tempPtr == mem_heap_hi() + 1, size);
+
+        if(heapSize < size) {
+            printf("got here \n");
             if((newBlockptr = extendHeap(CHUNKSIZE)) == NULL) {
                 return NULL;
             }
+            assert(newBlockptr == mem_heap_hi() + 1);
             coalesce(newBlockptr);
         }
 
         tempPtr = GETNXTBLK(tempPtr);
+        assert((long)tempPtr % 8 == 0);
 
     }
     return NULL;
@@ -200,34 +218,62 @@ static char * coalesce(char * ptr) {
     size_t newSize;
     size_t prevBlockAlloc = GET_ALLOC(GET_HEADER(GETPRVBLK(ptr)));
     size_t nextBlockAlloc = GET_ALLOC(GET_HEADER(GETNXTBLK(ptr)));
+    printf("ALLocs prev %d next %d prevsize %d start ptr %u \n", prevBlockAlloc, nextBlockAlloc,GET_SIZE(GET_HEADER(GETNXTBLK(ptr))), ptr);
 
     if(prevBlockAlloc && nextBlockAlloc) {
-        //printf("case 1");
-        return ptr;
+        printf("case 1");
 
     } else if(!prevBlockAlloc && !nextBlockAlloc) {
-        //printf("case 2");
+        printf("case 2");
         newSize = GET_SIZE(GET_HEADER(GETPRVBLK(ptr))) 
         + GET_SIZE(GET_HEADER(GETNXTBLK(ptr))) 
         + GET_SIZE(GET_HEADER(ptr));
         PUT(GET_HEADER(GETPRVBLK(ptr)), PACK(newSize,0));
         PUT(GET_FOOTER(GETNXTBLK(ptr)), PACK(newSize,0));
-        return GETPRVBLK(ptr);
+        ptr = GETPRVBLK(ptr);
 
     } else if(!prevBlockAlloc && nextBlockAlloc) {
-        //printf("case 3");
+        printf("case 3");
         newSize = GET_SIZE(GET_HEADER(GETPRVBLK(ptr)))+ GET_SIZE(GET_HEADER(ptr));
         PUT(GET_HEADER(GETPRVBLK(ptr)), PACK(newSize,0));
         PUT(GET_FOOTER(ptr), PACK(newSize,0));
-        return GETPRVBLK(ptr);
+        ptr = GETPRVBLK(ptr);
 
     } else {
-        //printf("case 4");
+        printf("case 4");
         newSize = GET_SIZE(GET_HEADER(GETNXTBLK(ptr)))+ GET_SIZE(GET_HEADER(ptr));
+        //printf("the new size %d \n", newSize);
         PUT(GET_HEADER(ptr), PACK(newSize,0));
         PUT(GET_FOOTER(GETNXTBLK(ptr)), PACK(newSize,0));
-        return ptr;
     }
+    assert((long)ptr % 8 == 0);
+    return ptr;
+
+}
+
+
+void shrinkHeap(char * ptr) {
+    printf("the shrinking pointer is %u \n", ptr);
+    size_t s = GET_SIZE(GET_HEADER(ptr)) * -1;
+    sbrk(s);
+    printf("restarted the break \n");
+    PUT(ptr - 4, PACK(0,1));
+    lowerHighPtr(s);
+}
+
+void heapCheck() {
+    char * high = mem_heap_hi();
+    char * low = mem_heap_lo();
+    size_t size = mem_heapsize();
+    //check overlapping
+    //check freed blocks to be free
+    //check allocated blocks
+
+    
+}
+
+//check when everything is freed that sbrk is back to where it was
+void endCheck() {
 
 }
 

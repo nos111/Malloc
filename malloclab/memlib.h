@@ -8,4 +8,5 @@ void *mem_heap_lo(void);
 void *mem_heap_hi(void);
 size_t mem_heapsize(void);
 size_t mem_pagesize(void);
-
+void unix_error(char *msg);
+void lowerHighPtr(size_t inc);
