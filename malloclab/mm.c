@@ -73,7 +73,6 @@ int mm_init(void)
     if((heapPtr = extendHeap(5*WSIZE)) == NULL) {
         return -1;
     }
-    //printf("heap pointer at init %u", heapPtr);
     PUT(heapPtr, 0);    //alignment padding
     PUT(heapPtr + WSIZE, PACK(WSIZE, 1));      //prologue blocks
     PUT(heapPtr + 2*WSIZE, PACK(0,1));         //epilogue header
@@ -82,7 +81,6 @@ int mm_init(void)
     if((heapPtr = extendHeap(CHUNKSIZE)) == NULL) {
         return -1;
     }
-    //printf("heap pointer at init %u", heapPtr);
     return 0;
 }
 
@@ -97,14 +95,11 @@ void *mm_malloc(size_t size)
     }
     size_t newsize;
     if(size == 0) return NULL;
-    //printf("requested size %zu \n", size);
     size += DSIZE;
     newsize = ALIGN(size + SIZE_T_SIZE);
-    //printf("aligned size %zu \n", newsize);
     assert(newsize % 8 == 0);
     char * ptr = findFit(newsize);
     r.allocatedBlocks[++r.allocatedEntries] = ptr;
-    //printf("the returned address from malloc is %u \n", ptr);
     return (void*)ptr;
 }
 
@@ -170,34 +165,23 @@ static char * findFit(size_t size) {
     int allocation;
     int counter = 0;
     while(!fitFound) {
-        if(counter++ == 10) exit(0);
-
-        //printf("temp %u high %u \n", tempPtr,  mem_heap_hi());
         currentBS = GET_SIZE(GET_HEADER(tempPtr));
         allocation = GET_ALLOC(GET_HEADER(tempPtr));
-        //printf("size %d allocation %d ptr %u \n", currentBS, allocation, tempPtr);
         if((!allocation) && (currentBS >= size)) {
             return chunkBlock(tempPtr, size);
         }
         //check if there is enough space in the heap and extend otherwise
         int heapSize = (int)((void*)(mem_heap_current()) - (void*)GET_FOOTER(tempPtr));
         assert(heapSize >= 0);
-        //printf("condition %d difference %d \n", heapSize < size, heapSize);
-        //printf("condition %d requested size %d \n", tempPtr == mem_heap_hi() + 1, size);
-
         if(heapSize < size) {
-            printf("got here \n");
             if((newBlockptr = extendHeap(CHUNKSIZE)) == NULL) {
                 return NULL;
             }
-            printf("newptr %u high heap %u \n",newBlockptr, mem_heap_hi());
             assert(newBlockptr == mem_heap_current() - CHUNKSIZE);
             coalesce(newBlockptr);
         }
-
         tempPtr = GETNXTBLK(tempPtr);
         assert((long)tempPtr % 8 == 0);
-
     }
     return NULL;
 }
@@ -220,10 +204,10 @@ static char * coalesce(char * ptr) {
     //printf("ALLocs prev %d next %d prevsize %d start ptr %u \n", prevBlockAlloc, nextBlockAlloc,GET_SIZE(GET_HEADER(GETNXTBLK(ptr))), ptr);
 
     if(prevBlockAlloc && nextBlockAlloc) {
-        printf("case 1");
+        printf("case 1 \n");
 
     } else if(!prevBlockAlloc && !nextBlockAlloc) {
-        printf("case 2");
+        printf("case 2 \n");
         newSize = GET_SIZE(GET_HEADER(GETPRVBLK(ptr))) 
         + GET_SIZE(GET_HEADER(GETNXTBLK(ptr))) 
         + GET_SIZE(GET_HEADER(ptr));
@@ -232,16 +216,15 @@ static char * coalesce(char * ptr) {
         ptr = GETPRVBLK(ptr);
 
     } else if(!prevBlockAlloc && nextBlockAlloc) {
-        printf("case 3");
+        printf("case 3 \n");
         newSize = GET_SIZE(GET_HEADER(GETPRVBLK(ptr)))+ GET_SIZE(GET_HEADER(ptr));
         PUT(GET_HEADER(GETPRVBLK(ptr)), PACK(newSize,0));
         PUT(GET_FOOTER(ptr), PACK(newSize,0));
         ptr = GETPRVBLK(ptr);
 
     } else {
-        printf("case 4");
+        printf("case 4 \n");
         newSize = GET_SIZE(GET_HEADER(GETNXTBLK(ptr)))+ GET_SIZE(GET_HEADER(ptr));
-        //printf("the new size %d \n", newSize);
         PUT(GET_HEADER(ptr), PACK(newSize,0));
         PUT(GET_FOOTER(GETNXTBLK(ptr)), PACK(newSize,0));
     }
@@ -258,23 +241,6 @@ void shrinkHeap(char * ptr) {
     printf("restarted the break \n");
     PUT(ptr - 4, PACK(0,1));
 }
-
-void heapCheck() {
-    char * high = mem_heap_hi();
-    char * low = mem_heap_lo();
-    size_t size = mem_heapsize();
-    //check overlapping
-    //check freed blocks to be free
-    //check allocated blocks
-
-    
-}
-
-//check when everything is freed that sbrk is back to where it was
-void endCheck() {
-
-}
-
 
 
 
