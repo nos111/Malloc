@@ -13,8 +13,10 @@
 
 #include "memlib.h"
 
+#define HEAP_SIZE 2147483648
 /* private variables */
 static char *mem_start_brk;  /* points to first byte of heap */
+static char *mem_current_brk;  /* points to current byte of heap */
 static char *mem_brk;        /* points to last byte of heap */
 static char *mem_max_addr;   /* largest legal heap address */ 
 static int initialize = 0;
@@ -26,8 +28,10 @@ void unix_error(char *msg);
 void mem_init(void)
 {
     initialize = 1;
-    mem_start_brk = sbrk(8);  
-    mem_brk = sbrk(0);               
+    if((mem_start_brk = sbrk(HEAP_SIZE)) == -1) unix_error("sbrk error");  
+    mem_brk = sbrk(0);
+    mem_current_brk = mem_start_brk + 8;
+    assert(mem_start_brk == mem_brk - HEAP_SIZE);             
 }
 
 /* 
@@ -57,10 +61,13 @@ void *mem_sbrk(int incr)
     if(!initialize) {
         mem_init();
     }
-    char *old_brk = sbrk(incr);
-
-    if(old_brk != (void*)-1) mem_brk += incr;;
-    
+    char *old_brk = mem_current_brk;
+    mem_current_brk += incr;
+    if(mem_current_brk > mem_heap_hi()) {
+        mem_current_brk -= incr;
+        return (void*)-1;
+    }
+    assert(old_brk + incr == mem_current_brk);
     return (void *)old_brk;
 }
 
@@ -80,6 +87,9 @@ void *mem_heap_hi()
     return (void *)(mem_brk - 1);
 }
 
+void * mem_heap_current() {
+    return (void*)(mem_current_brk);
+}
 /*
  * mem_heapsize() - returns the heap size in bytes
  */

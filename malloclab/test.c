@@ -16,7 +16,7 @@ int main(int argc, char **argv) {
   testAllign(test3);
   char * test4 = mm_malloc(1000);
   testAllign(test4);
-  //mm_free(test4);
+  mm_free(test4);
   char * test5 = mm_malloc(1000);
   testAllign(test5);
   mm_free(test3);

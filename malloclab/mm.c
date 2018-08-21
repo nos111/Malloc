@@ -70,7 +70,7 @@ void shrinkHeap(char * ptr);
 int mm_init(void)
 {
     initialize = 1;
-    if((heapPtr = extendHeap(4*WSIZE)) == NULL) {
+    if((heapPtr = extendHeap(5*WSIZE)) == NULL) {
         return -1;
     }
     //printf("heap pointer at init %u", heapPtr);
@@ -115,12 +115,11 @@ void mm_free(void *ptr)
 {
     char * temp;
     printf("freeing block %u \n", ptr);
-    printf("the high pointer is %u \n", mem_heap_hi());
     prepareBlock(ptr, GET_SIZE(GET_HEADER(ptr)),0);
-    printf("freed block size %d pointer %u highheap %u \n",GET_SIZE(GET_HEADER(ptr)), ptr, mem_heap_hi());
+    printf("freed block size %d pointer %u highheap %u \n",GET_SIZE(GET_HEADER(ptr)), ptr, mem_heap_current());
     temp = coalesce(ptr);
-    printf("coalesced block size %d pointer %u highheap %u \n",GET_SIZE(GET_HEADER(temp)), temp, mem_heap_hi());
-    if((GET_SIZE(GET_HEADER(temp)) + temp - 1) == mem_heap_hi()) {
+    printf("coalesced block size %d pointer %u highheap %u \n",GET_SIZE(GET_HEADER(temp)), temp, mem_heap_current());
+    if((GET_SIZE(GET_HEADER(temp)) + temp) == mem_heap_current()) {
         printf("found it \n");
         shrinkHeap(temp);
     }
@@ -151,7 +150,7 @@ static char * extendHeap(size_t size) {
     if((void*)(blockptr = mem_sbrk(size)) == (void *)-1) {
         return NULL;
     }
-    //blockptr += WSIZE;
+    blockptr += WSIZE;
     PUT(GET_HEADER(blockptr), PACK(size,0));
     PUT(GET_FOOTER(blockptr), PACK(size,0));
     PUT(GET_HEADER(GETNXTBLK(blockptr)), PACK(0,1));
@@ -173,17 +172,16 @@ static char * findFit(size_t size) {
     while(!fitFound) {
         if(counter++ == 10) exit(0);
 
-        printf("temp %u high %u \n", tempPtr,  mem_heap_hi());
+        //printf("temp %u high %u \n", tempPtr,  mem_heap_hi());
         currentBS = GET_SIZE(GET_HEADER(tempPtr));
         allocation = GET_ALLOC(GET_HEADER(tempPtr));
-        printf("size %d allocation %d ptr %u \n", currentBS, allocation, tempPtr);
+        //printf("size %d allocation %d ptr %u \n", currentBS, allocation, tempPtr);
         if((!allocation) && (currentBS >= size)) {
             return chunkBlock(tempPtr, size);
         }
         //check if there is enough space in the heap and extend otherwise
-        int heapSize = (int)((void*)(mem_heap_hi()) - (void*)GET_FOOTER(tempPtr));
+        int heapSize = (int)((void*)(mem_heap_current()) - (void*)GET_FOOTER(tempPtr));
         assert(heapSize >= 0);
-        printf("heapsize %d \n", heapSize);
         //printf("condition %d difference %d \n", heapSize < size, heapSize);
         //printf("condition %d requested size %d \n", tempPtr == mem_heap_hi() + 1, size);
 
@@ -192,7 +190,8 @@ static char * findFit(size_t size) {
             if((newBlockptr = extendHeap(CHUNKSIZE)) == NULL) {
                 return NULL;
             }
-            assert(newBlockptr == mem_heap_hi() + 1);
+            printf("newptr %u high heap %u \n",newBlockptr, mem_heap_hi());
+            assert(newBlockptr == mem_heap_current() - CHUNKSIZE);
             coalesce(newBlockptr);
         }
 
@@ -218,7 +217,7 @@ static char * coalesce(char * ptr) {
     size_t newSize;
     size_t prevBlockAlloc = GET_ALLOC(GET_HEADER(GETPRVBLK(ptr)));
     size_t nextBlockAlloc = GET_ALLOC(GET_HEADER(GETNXTBLK(ptr)));
-    printf("ALLocs prev %d next %d prevsize %d start ptr %u \n", prevBlockAlloc, nextBlockAlloc,GET_SIZE(GET_HEADER(GETNXTBLK(ptr))), ptr);
+    //printf("ALLocs prev %d next %d prevsize %d start ptr %u \n", prevBlockAlloc, nextBlockAlloc,GET_SIZE(GET_HEADER(GETNXTBLK(ptr))), ptr);
 
     if(prevBlockAlloc && nextBlockAlloc) {
         printf("case 1");
@@ -255,10 +254,9 @@ static char * coalesce(char * ptr) {
 void shrinkHeap(char * ptr) {
     printf("the shrinking pointer is %u \n", ptr);
     size_t s = GET_SIZE(GET_HEADER(ptr)) * -1;
-    sbrk(s);
+    mem_sbrk(s);
     printf("restarted the break \n");
     PUT(ptr - 4, PACK(0,1));
-    lowerHighPtr(s);
 }
 
 void heapCheck() {
