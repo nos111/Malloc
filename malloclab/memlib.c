@@ -69,7 +69,6 @@ void *mem_sbrk(int incr)
         mem_current_brk -= incr;
         return (void*)-1;
     }
-    //printf("mem_current %u mem_start %u \n", mem_current_brk, mem_start_brk);
     if(mem_current_brk == mem_start_brk + 8) {
         mem_deinit();
     }
