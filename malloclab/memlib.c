@@ -41,6 +41,8 @@ void mem_deinit(void)
 {
     if(brk(mem_start_brk) == -1) unix_error("brk error"); 
     initialize = 0;  
+    char * buffer = "Freed all allocated storange \n";
+    write(1, buffer, 30);
 }
 
 /*
@@ -66,6 +68,10 @@ void *mem_sbrk(int incr)
     if(mem_current_brk > mem_heap_hi()) {
         mem_current_brk -= incr;
         return (void*)-1;
+    }
+    //printf("mem_current %u mem_start %u \n", mem_current_brk, mem_start_brk);
+    if(mem_current_brk == mem_start_brk + 8) {
+        mem_deinit();
     }
     assert(old_brk + incr == mem_current_brk);
     return (void *)old_brk;

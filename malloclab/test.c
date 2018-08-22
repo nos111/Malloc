@@ -3,7 +3,6 @@
 
 
 int testAllign(char * ptr) {
-  printf("the pointer is %lu \n", ptr);
   return ((long)ptr % 8) ? 0 : 1;
 }
 
@@ -17,8 +16,22 @@ int main(int argc, char **argv) {
   char * test4 = mm_malloc(1000);
   testAllign(test4);
   mm_free(test4);
-  char * test5 = mm_malloc(1000);
-  testAllign(test5);
+  //char * test5 = mm_malloc(1000);
+  //testAllign(test5);
+  mm_free(test3);
+  mm_free(test2);
+  mm_free(test1);
+  test1 = mm_malloc(1000);
+  testAllign(test1);
+  test2 = mm_malloc(1000);
+  testAllign(test2);
+  test3 = mm_malloc(1000);
+  testAllign(test3);
+  test4 = mm_malloc(1000);
+  testAllign(test4);
+  mm_free(test4);
+  //char * test5 = mm_malloc(1000);
+  //testAllign(test5);
   mm_free(test3);
   mm_free(test2);
   mm_free(test1);

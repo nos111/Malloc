@@ -109,14 +109,18 @@ void *mm_malloc(size_t size)
 void mm_free(void *ptr)
 {
     char * temp;
-    printf("freeing block %u \n", ptr);
+    //printf("freeing block %u \n", ptr);
     prepareBlock(ptr, GET_SIZE(GET_HEADER(ptr)),0);
-    printf("freed block size %d pointer %u highheap %u \n",GET_SIZE(GET_HEADER(ptr)), ptr, mem_heap_current());
+    //printf("freed block size %d pointer %u highheap %u \n",GET_SIZE(GET_HEADER(ptr)), ptr, mem_heap_current());
     temp = coalesce(ptr);
-    printf("coalesced block size %d pointer %u highheap %u \n",GET_SIZE(GET_HEADER(temp)), temp, mem_heap_current());
-    if((GET_SIZE(GET_HEADER(temp)) + temp) == mem_heap_current()) {
-        printf("found it \n");
+    //printf("coalesced block size %d pointer %u highheap %u \n",GET_SIZE(GET_HEADER(temp)), temp, mem_heap_current());
+    if((GET_SIZE(GET_HEADER(temp)) + temp - WSIZE) == mem_heap_current()) {
+        //printf("found it \n");
         shrinkHeap(temp);
+    }
+    if(temp == mem_heap_lo() + 4*DSIZE) {
+        mem_deinit();
+        initialize = 0;
     }
 }
 
@@ -177,7 +181,8 @@ static char * findFit(size_t size) {
             if((newBlockptr = extendHeap(CHUNKSIZE)) == NULL) {
                 return NULL;
             }
-            assert(newBlockptr == mem_heap_current() - CHUNKSIZE);
+            //printf("newblock %u heap_current %u \n", newBlockptr, mem_heap_current());
+            assert(newBlockptr == mem_heap_current() - CHUNKSIZE + WSIZE);
             coalesce(newBlockptr);
         }
         tempPtr = GETNXTBLK(tempPtr);
@@ -204,10 +209,10 @@ static char * coalesce(char * ptr) {
     //printf("ALLocs prev %d next %d prevsize %d start ptr %u \n", prevBlockAlloc, nextBlockAlloc,GET_SIZE(GET_HEADER(GETNXTBLK(ptr))), ptr);
 
     if(prevBlockAlloc && nextBlockAlloc) {
-        printf("case 1 \n");
+        //printf("case 1 \n");
 
     } else if(!prevBlockAlloc && !nextBlockAlloc) {
-        printf("case 2 \n");
+        //printf("case 2 \n");
         newSize = GET_SIZE(GET_HEADER(GETPRVBLK(ptr))) 
         + GET_SIZE(GET_HEADER(GETNXTBLK(ptr))) 
         + GET_SIZE(GET_HEADER(ptr));
@@ -216,14 +221,14 @@ static char * coalesce(char * ptr) {
         ptr = GETPRVBLK(ptr);
 
     } else if(!prevBlockAlloc && nextBlockAlloc) {
-        printf("case 3 \n");
+        //printf("case 3 \n");
         newSize = GET_SIZE(GET_HEADER(GETPRVBLK(ptr)))+ GET_SIZE(GET_HEADER(ptr));
         PUT(GET_HEADER(GETPRVBLK(ptr)), PACK(newSize,0));
         PUT(GET_FOOTER(ptr), PACK(newSize,0));
         ptr = GETPRVBLK(ptr);
 
     } else {
-        printf("case 4 \n");
+        //printf("case 4 \n");
         newSize = GET_SIZE(GET_HEADER(GETNXTBLK(ptr)))+ GET_SIZE(GET_HEADER(ptr));
         PUT(GET_HEADER(ptr), PACK(newSize,0));
         PUT(GET_FOOTER(GETNXTBLK(ptr)), PACK(newSize,0));
@@ -235,10 +240,10 @@ static char * coalesce(char * ptr) {
 
 
 void shrinkHeap(char * ptr) {
-    printf("the shrinking pointer is %u \n", ptr);
+    //printf("the shrinking pointer is %u \n", ptr);
     size_t s = GET_SIZE(GET_HEADER(ptr)) * -1;
     mem_sbrk(s);
-    printf("restarted the break \n");
+    //printf("restarted the break \n");
     PUT(ptr - 4, PACK(0,1));
 }
 
