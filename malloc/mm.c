@@ -69,9 +69,9 @@ void shrinkHeap(char * ptr);
  */
 int mm_init(void)
 {
-    initialize = 1;
+    
     if((heapPtr = extendHeap(5*WSIZE)) == NULL) {
-        return -1;
+        return 0;
     }
     PUT(heapPtr, 0);    //alignment padding
     PUT(heapPtr + WSIZE, PACK(WSIZE, 1));      //prologue blocks
@@ -79,9 +79,10 @@ int mm_init(void)
     heapPtr += 3*WSIZE;
     //build first block
     if((heapPtr = extendHeap(CHUNKSIZE)) == NULL) {
-        return -1;
+        return 0;
     }
-    return 0;
+    initialize = 1;
+    return initialize;
 }
 
 /* 
@@ -90,8 +91,7 @@ int mm_init(void)
 void *mm_malloc(size_t size)
 {
     if(!initialize) {
-        mm_init();
-        initialize = 1;
+        if(!mm_init()) unix_error("mm_init error");
     }
     size_t newsize;
     if(size == 0) return NULL;

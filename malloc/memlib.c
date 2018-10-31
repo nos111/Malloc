@@ -1,7 +1,5 @@
 /*
- * memlib.c - a module that simulates the memory system.  Needed because it 
- *            allows us to interleave calls from the student's malloc package 
- *            with the system's malloc package in libc.
+ * memlib.c - a module that simulates the memory system. 
  */
 #include <stdio.h>
 #include <stdlib.h>
@@ -27,11 +25,11 @@ void unix_error(char *msg);
  */
 void mem_init(void)
 {
-    initialize = 1;
     if((mem_start_brk = sbrk(HEAP_SIZE)) == -1) unix_error("sbrk error");  
     mem_brk = sbrk(0);
     mem_current_brk = mem_start_brk + 8;
-    assert(mem_start_brk == mem_brk - HEAP_SIZE);             
+    assert(mem_start_brk == mem_brk - HEAP_SIZE);  
+    initialize = 1;           
 }
 
 /* 
@@ -55,8 +53,7 @@ void mem_reset_brk()
 
 /* 
  * mem_sbrk - simple model of the sbrk function. Extends the heap 
- *    by incr bytes and returns the start address of the new area. In
- *    this model, the heap cannot be shrunk.
+ *    by incr bytes and returns the start address of the new area. 
  */
 void *mem_sbrk(int incr) 
 {
